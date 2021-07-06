@@ -3,10 +3,31 @@ from astropy.coordinates.earth import EarthLocation
 
 from radiospectra.spectrogram2.spectrogram import GenericSpectrogram
 
-__all__ = ["SWAVESSpectrogram", "RFSSpectrogram", "CALISTOSpectrogram", "EOVSASpectrogram", "RSTNSpectrogram"]
+__all__ = ['ILOFARSpectrogram', 'SWAVESSpectrogram', 'RFSSpectrogram', 'CALISTOSpectrogram', 'EOVSASpectrogram',
+           'RSTNSpectrogram']
+
+class ILOFARSpectrogram(BaseSpectrogram):
+    """
+    I-LOFAR mode 357 Spectrogram
+
+    """
+    def __init__(self, *, meta, data, **kwargs):
+        super().__init__(meta=meta, data=data, **kwargs)
+
+    @property
+    def statistic(self):
+        """
+        The name of the receiver
+        """
+        return self.meta['detector']
+
+    @classmethod
+    def is_datasource_for(cls, *, meta, data, **kwargs):
+        return meta['instrument'] == 'I-LOFAR'
 
 
-class SWAVESSpectrogram(GenericSpectrogram):
+
+class SWAVESSpectrogram(BaseSpectrogram):
     """
     STEREO Waves or S/WAVES, SWAVES Spectrogram.
 
