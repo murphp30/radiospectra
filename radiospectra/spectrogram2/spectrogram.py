@@ -115,7 +115,7 @@ def parse_path(path, f, **kwargs):
         raise ValueError('path must be a pathlib.Path object')
     path = path.expanduser()
     if is_file(path):
-        return [f(path, **kwargs)]
+        return list(f(path, **kwargs))
     elif is_dir(path):
         read_files = []
         for afile in sorted(path.glob('*')):
@@ -165,8 +165,13 @@ class PcolormeshPlotMixin:
         axes.set_title(title)
         axes.plot(self.times.datetime[[0, -1]], self.frequencies[[0, -1]],
                   linestyle='None', marker='None')
-        axes.pcolormesh(self.times.datetime, self.frequencies.value, data[:-1, :-1],
-                        shading='auto', **kwargs)
+        if (self.times.shape[0] == self.data.shape[0]
+                and self.frequencies.shape[0] == self.data.shape[1]):
+            axes.pcolormesh(self.times.datetime, self.frequencies.value, data, shading='auto',
+                            **kwargs)
+        else:
+            axes.pcolormesh(self.times.datetime, self.frequencies.value, data[:-1, :-1],
+                            shading='auto', **kwargs)
         axes.set_xlim(self.times.datetime[0], self.times.datetime[-1])
         locator = mdates.AutoDateLocator(minticks=4, maxticks=8)
         formatter = mdates.ConciseDateFormatter(locator)
@@ -526,7 +531,61 @@ class SpectrogramFactory(BasicRegistrationFactory):
 
             meta['times'] = meta['start_time'] + times
             meta['end_time'] = meta['start_time'] + times[-1]
+
             return data, meta
+        elif 'bst' in file.name:
+            def subband_to_freq(subband, obs_mode):
+                """
+                Converts LOFAR single station subbands to frequency
+
+                Parameters
+                ----------
+                subband : `int`
+                    Subband number
+                obs_mode : `int`
+                    Observation mode 3, 5, 7
+
+                Return
+                ------
+                freq
+                    frequency as astropy.units.Quantity (MHz)
+                """
+                nyq_zone_dict = {3: 1, 5: 2, 7: 3}
+                nyq_zone = nyq_zone_dict[obs_mode]
+                clock_dict = {3: 200, 4: 160, 5: 200, 6: 160, 7: 200}  # MHz
+                clock = clock_dict[obs_mode]
+                freq = (nyq_zone - 1 + subband / 512) * (clock / 2)
+                return freq * u.MHz  # MHz
+
+            subbands = (np.arange(54, 454, 2), np.arange(54, 454, 2), np.arange(54, 230, 2))
+            num_subbands = 488
+
+            data = np.fromfile(file)
+            polarisation = file.stem[-1]
+
+            num_times = data.shape[0] / num_subbands
+            data = data.reshape(-1, num_subbands).T  # (Freq x Time).T = (Time x Freq)
+            dt = np.arange(num_times) * 1 * u.s
+            start_time = Time.strptime(file.name.split('_bst')[0], "%Y%m%d_%H%M%S")
+            times = start_time + dt
+
+            obs_mode = (3, 5, 7)
+
+            freqs = [subband_to_freq(sb, mode) for sb, mode in zip(subbands, obs_mode)]
+
+            # 1st 200 sbs mode 3, next 200 sbs mode 5, last 88 sbs mode 7
+            spec = {0: data[:200, :], 1: data[200:400, :], 2: data[400:, :]}
+            data_header_pairs = []
+            for i in range(3):
+                meta = {'instrument': 'ILOFAR', 'observatory': 'Birr (IE613)',
+                        'start_time': times[0], 'mode': obs_mode[i],
+                        'wavelength': a.Wavelength(freqs[i][0], freqs[i][-1]),
+                        'freqs': freqs[i], 'times': times, 'end_time': times[-1],
+                        'detector': 'ILOFAR', 'polarisation': polarisation}
+
+                data_header_pairs.append((spec[i], meta))
+
+            return data_header_pairs
 
     @staticmethod
     def _read_srs(file):
