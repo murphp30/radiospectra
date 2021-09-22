@@ -9,4 +9,3 @@ from radiospectra.net.sources.wind import WAVESClient
 
 __all__ = ['CALLISTOClient', 'EOVSAClient', 'RFSClient', 'SWAVESClient', 'RSTNClient',
            'WAVESClient', 'ILOFARMode357Client']
-
