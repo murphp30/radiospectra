@@ -34,7 +34,7 @@ from sunpy.util.exceptions import SunpyUserWarning
 from sunpy.util.functools import seconddispatch
 from sunpy.util.metadata import MetaDict
 from sunpy.util.util import expand_list
-
+import pdb
 SUPPORTED_ARRAY_TYPES = (np.ndarray,)
 try:
     import dask.array
@@ -131,6 +131,29 @@ def parse_path(path, f, **kwargs):
     else:
         raise ValueError(f"Did not find any files at {path}")
 
+def sb_to_freq(sb, obs_mode):
+    """
+    Converts LOFAR single station subbands to frequency
+
+    Parameters
+    ----------
+    sb : float or array
+        subband number
+    obs_mode : int
+        observation mode, must be one either 3, 5 or 7
+
+    Returns
+    ----------
+    astropy.units.Quantity
+        Frequency as in MHz
+
+    """
+    nyq_zone_dict = {3: 1, 5: 2, 7: 3}
+    nyq_zone = nyq_zone_dict[obs_mode]
+    clock_dict = {3: 200, 4: 160, 5: 200, 6: 160, 7: 200}  # MHz
+    clock = clock_dict[obs_mode]
+    freq = (nyq_zone - 1 + sb / 512) * (clock / 2)
+    return freq * u.MHz
 
 class PcolormeshPlotMixin:
     """
@@ -543,7 +566,43 @@ class SpectrogramFactory(BasicRegistrationFactory):
             meta["times"] = meta["start_time"] + times
             meta["end_time"] = meta["start_time"] + times[-1]
             return data, meta
-
+        elif "bst" in file.name:
+            date, time, file_type, polarisation = file.stem.split("_")
+            # observation start taken from file name
+            obs_start = Time.strptime(date+time, "%Y%m%d%H%M%S")
+            # assume 8 bit mode 357 observation (default for ILOFAR)
+            data = np.fromfile(file)
+            data = data.reshape(-1, 488) #488 subbands in 8 bit mode
+            t_len = data.shape[0]
+            tarr = np.arange(t_len) * 1*u.s #assume 1 second resolution (default for ILOFAR)
+            times = obs_start + tarr
+            """
+            frequencies for mode 357 using the following assumptions:
+            Mode 357 is always done with 488 subbands
+            The subband numbers are defined as
+            Mode 3: 54 -> 452 in steps of 2
+            Mode 5: 54 -> 452 in steps of 2
+            Mode 7: 54 -> 228 in steps of 2
+            The integration time is always 1 second
+            The target source is always the sun
+            """
+            sbs = np.array((np.arange(54, 454, 2), np.arange(54, 454, 2), np.arange(54, 230, 2)),dtype=object)
+            obs_mode = np.array((3, 5, 7))
+            freqs = np.array([sb_to_freq(sb, mode) for sb, mode in zip(sbs, obs_mode)],dtype=object)
+            freqs = np.concatenate(freqs)
+            # pdb.set_trace()
+            meta = {
+                "instrument": "ILOFAR",
+                "observatory": "ILOFAR",
+                "polarisation": polarisation,
+                "start_time": obs_start,
+                "end_time": times[-1],
+                "wavelength": a.Wavelength(freqs[0], freqs[-1]),
+                "detector": "ILOFAR",
+                "freqs": freqs,
+                "times": times,
+            }
+            return data, meta
     @staticmethod
     def _read_srs(file):
 
