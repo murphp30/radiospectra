@@ -3,8 +3,8 @@ from astropy.coordinates.earth import EarthLocation
 
 from radiospectra.spectrogram2.spectrogram import GenericSpectrogram
 
-__all__ = ['ILOFARSpectrogram', 'SWAVESSpectrogram', 'RFSSpectrogram', 'CALISTOSpectrogram', 'EOVSASpectrogram',
-           'RSTNSpectrogram']
+__all__ = ['SWAVESSpectrogram', 'RFSSpectrogram', 'CALISTOSpectrogram', 'EOVSASpectrogram',
+           'RSTNSpectrogram', 'ILOFARMode357Spectrogram', 'WAVESSpectrogram']
 
 class ILOFARSpectrogram(BaseSpectrogram):
     """
@@ -223,3 +223,20 @@ class RSTNSpectrogram(GenericSpectrogram):
     @classmethod
     def is_datasource_for(cls, data, meta, **kwargs):
         return meta["instrument"] == "RSTN"
+
+
+class ILOFARMode357Spectrogram(GenericSpectrogram):
+    """
+    Irish LOFAR Station mode 357 Spectrogram
+    """
+    @property
+    def mode(self):
+        return self.meta.get('mode')
+
+    @property
+    def polarisation(self):
+        return self.meta.get('polarisation')
+
+    @classmethod
+    def is_datasource_for(cls, data, meta, **kwargs):
+        return meta['instrument'] == 'ILOFAR'
