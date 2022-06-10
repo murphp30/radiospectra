@@ -602,6 +602,7 @@ class SpectrogramFactory(BasicRegistrationFactory):
                 "freqs": freqs,
                 "times": times,
             }
+            data = data.T
             return data, meta
     @staticmethod
     def _read_srs(file):
